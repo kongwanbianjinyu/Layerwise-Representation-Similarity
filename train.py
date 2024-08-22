@@ -28,7 +28,7 @@ def parse_config():
     parser.add_argument("--effective_batch_size", type=int, 
         help="effective_bsz = batch_size_per_gpu x number_of_gpu x gradient_accumulation_steps")
     # pre-training configuration
-    parser.add_argument("--mode", type=str, choices=['standard', 'aligned', 'aligned_alternating'],  help="standard mode or aligned mode")
+    parser.add_argument("--mode", type=str, choices=['standard', 'aligned', 'aligned_alternating', "multi_exit"],  help="standard mode or aligned mode")
     parser.add_argument("--total_steps", type=int, 
         help="total effective training steps")
     parser.add_argument("--print_every", type=int, 
@@ -78,9 +78,14 @@ if __name__ == '__main__':
     from trainer import model_training
     print ('############################################################')
     print ('Start Training...')
-    from simctg import SimCTG
-    print ('Initializaing SimCTG model...')
-    model = SimCTG(args, model_name, data.pad_token_id)
+    if args.mode == "multi_exit":
+        from multiexit_simctg import MultiExitSimCTG
+        print ('Initializaing MultiExitSimCTG model...')
+        model = MultiExitSimCTG(args, model_name, data.pad_token_id)
+    else:
+        from simctg import SimCTG
+        print ('Initializaing SimCTG model...')
+        model = SimCTG(args, model_name, data.pad_token_id)
     if cuda_available:
         if multi_gpu_training:
             model = nn.DataParallel(model) # multi-gpu training

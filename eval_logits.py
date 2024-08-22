@@ -66,15 +66,9 @@ def eval_model_logits(args, model, data, device):
 
         print ('Saturate event count for each layer{}'.format(saturate_event_count))
 
-        # plot saturate event count
-        import matplotlib.pyplot as plt
-        plt.bar(range(12), saturate_event_count)
-        plt.xlabel('Layers')
-        plt.ylabel('Saturate event count')
-        plt.title('GPT2 Saturate Event Count')
-        plt.savefig('gpt2_saturate_event_count.png')
-            
-
+        # save the result all_saturate_layers (num_tokens,) each element is the layer index that saturate event happens for this token.
+        np.save('alignedgpt2_saturate_event.npy', all_saturate_layers)
+        print('Saturate event layer index saved to alignedgpt2_saturate_event.npy')
         p.finish()
 
 
