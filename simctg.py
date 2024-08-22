@@ -35,6 +35,18 @@ class SimCTG(nn.Module):
         self.hidden_states = None
         self.stage = 0
 
+    def compute_all_layer_logits(self, input_ids):
+        outputs = self.model(input_ids=input_ids, output_hidden_states=True)
+        # outputs.hidden_states shape : 13 * (batch_size, sequence_length, hidden_size)
+        # get all layer logits by applying lm_head to each hidden state
+        lm_head = self.model.lm_head
+        all_layer_logits = []
+        for each_layer_hidden_states in outputs.hidden_states[1:]:
+            each_layer_logits = lm_head(each_layer_hidden_states)
+            all_layer_logits.append(each_layer_logits)
+        # all_layer_logits shape: 12 * (batch_size, sequence_length, vocab_size)
+        return all_layer_logits
+
     def compute_logits_and_hidden_states(self, input_ids):
         # used for advanced decoding
         # input_ids: 1 x seqlen

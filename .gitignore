@@ -4,6 +4,7 @@ standard_wikitext103/
 outputs/
 wandb/
 logs/
+data/
 
 *.json
 *.out
