@@ -1,3 +1,13 @@
+aligned_alternating_wikitext103/
+aligned_wikitext103/
+standard_wikitext103/
+outputs/
+wandb/
+logs/
+
+*.json
+*.out
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
