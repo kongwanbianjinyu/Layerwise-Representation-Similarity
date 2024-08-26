@@ -100,7 +100,14 @@ def model_training(args, data, model, total_steps, print_every, eval_every, save
     warmup_steps = int(0.1 * total_steps) # 10% of training steps are used for warmup
     print ('total training steps is {}, warmup steps is {}'.format(total_steps, warmup_steps))
     from transformers.optimization import AdamW, get_linear_schedule_with_warmup
-    optimizer = AdamW(model.parameters(), lr=args.learning_rate)
+    # Collect parameters of lm_heads
+    if args.only_train_lm_heads:
+        lm_heads_params = []
+        for lm_head in model.multi_lm_heads:
+            lm_heads_params.extend(lm_head.parameters())
+        optimizer = AdamW(lm_heads_params, lr=args.learning_rate)
+    else:
+        optimizer = AdamW(model.parameters(), lr=args.learning_rate)
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=total_steps)
     optimizer.zero_grad()
 
@@ -111,7 +118,7 @@ def model_training(args, data, model, total_steps, print_every, eval_every, save
     train_ave_bleu = 0.
     if args.mode == 'standard':
         train_all_layer_loss = [0] * 1
-    elif args.mode == 'aligned' or 'aligned_alternating':
+    else:
         train_all_layer_loss = [0] * 12
 
     print ('--------------------------------------------------------------------------')
@@ -126,6 +133,8 @@ def model_training(args, data, model, total_steps, print_every, eval_every, save
             train_batch_input_tensor = train_batch_input_tensor.cuda(device)
             train_batch_labels = train_batch_labels.cuda(device)
         loss, all_layer_loss = model(train_batch_input_tensor, train_batch_labels, args.margin)
+        # print("[debug] loss: ", loss)   
+        # print("[debug] all_layer_loss: ", all_layer_loss)
        
         #loss = loss.mean()
         loss.backward()
@@ -152,8 +161,8 @@ def model_training(args, data, model, total_steps, print_every, eval_every, save
             if args.mode == 'standard':
                 print ('At training steps {}, training loss is {}'.format(effective_batch_acm, one_train_loss))
                 wandb.log({'train_loss': one_train_loss})
-            elif args.mode == 'aligned':
-                print ('At training steps {}, training loss is {}, each layer loss is {}'.format(effective_batch_acm, 
+            else:
+                print ('[Print] At training steps {}, training loss is {}, each layer loss is {}'.format(effective_batch_acm, 
                     one_train_loss, one_train_all_layer_loss))
                 wandb.log({'train_loss': one_train_loss})
                 for i, one_layer_loss in enumerate(one_train_all_layer_loss):
@@ -170,11 +179,11 @@ def model_training(args, data, model, total_steps, print_every, eval_every, save
                 print ('At training steps {}, training MLE loss is {}, validation loss is {}, perplexity is {}'.format(effective_batch_acm, 
                     one_train_loss, one_val_loss, round(np.exp(one_val_loss),3)))
                 wandb.log({'train_loss': one_train_loss, 'val_loss': one_val_loss, 'val_ppl': np.exp(one_val_loss)})
-            elif args.mode == 'aligned' or 'aligned_alternating':
+            else:
                 all_layer_val_loss = np.array(all_layer_val_loss)
                 all_layer_ppl = np.exp(all_layer_val_loss)
                 all_layer_ppl = [round(x, 3) for x in all_layer_ppl]
-                print ('At training steps {}, training MLE loss is {}, validation loss is {}, each layer perplexity is {}'.format(effective_batch_acm, 
+                print ('[Eval] At training steps {}, training MLE loss is {}, validation loss is {}, each layer perplexity is {}'.format(effective_batch_acm, 
                     one_train_loss, one_val_loss, all_layer_ppl))
                 wandb.log({'train_loss': one_train_loss, 'val_loss': one_val_loss})
                 for i, one_layer_ppl in enumerate(all_layer_ppl):
@@ -199,11 +208,11 @@ def model_training(args, data, model, total_steps, print_every, eval_every, save
                 print ('At training steps {}, training MLE loss is {}, validation loss is {}, perplexity is {}'.format(effective_batch_acm, 
                     one_train_loss, one_val_loss, round(np.exp(one_val_loss),3)))
                 wandb.log({'train_loss': one_train_loss, 'val_loss': one_val_loss, 'val_ppl': np.exp(one_val_loss)})
-            elif args.mode == 'aligned' or 'aligned_alternating':
+            else:
                 all_layer_val_loss = np.array(all_layer_val_loss)
                 all_layer_ppl = np.exp(all_layer_val_loss)
                 all_layer_ppl = [round(x, 3) for x in all_layer_ppl]
-                print ('At training steps {}, training MLE loss is {}, validation loss is {}, each layer perplexity is {}'.format(effective_batch_acm, 
+                print ('[Save] At training steps {}, training MLE loss is {}, validation loss is {}, each layer perplexity is {}'.format(effective_batch_acm, 
                     one_train_loss, one_val_loss, all_layer_ppl))
                 wandb.log({'train_loss': one_train_loss, 'val_loss': one_val_loss})
                 for i, one_layer_ppl in enumerate(all_layer_ppl):
@@ -222,7 +231,7 @@ def model_training(args, data, model, total_steps, print_every, eval_every, save
                     one_val_ppl = round(one_val_ppl, 3)
                     save_name = 'training_step_{}_train_loss_{}_dev_loss_{}_dev_ppl_{}'.format(effective_batch_acm,
                     round(one_train_loss,5), round(one_val_loss,5), one_val_ppl)
-                elif args.mode == 'aligned' or 'aligned_alternating':
+                else:
                     one_val_ppl = np.exp(all_layer_val_loss)
                     one_val_ppl = [round(x, 3) for x in one_val_ppl]
                     one_val_ppl_str = "_".join([str(x) for x in one_val_ppl])

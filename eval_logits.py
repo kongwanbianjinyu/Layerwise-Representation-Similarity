@@ -67,8 +67,8 @@ def eval_model_logits(args, model, data, device):
         print ('Saturate event count for each layer{}'.format(saturate_event_count))
 
         # save the result all_saturate_layers (num_tokens,) each element is the layer index that saturate event happens for this token.
-        np.save('alignedgpt2_saturate_event.npy', all_saturate_layers)
-        print('Saturate event layer index saved to alignedgpt2_saturate_event.npy')
+        np.save(args.save_npy_path, all_saturate_layers)
+        print(f'Saturate event layer index saved to {args.save_npy_path}')
         p.finish()
 
 
@@ -78,6 +78,7 @@ def eval_model_logits(args, model, data, device):
 def parse_config():
     parser = argparse.ArgumentParser()
     # model and data configuration
+    parser.add_argument("--mode", type=str, help="mode of the model, multi_exit or single_exit")
     parser.add_argument("--ckpt_path", type=str, help="path of the pre-trained checkpoint")
     parser.add_argument("--train_path", type=str)
     parser.add_argument("--dev_path", type=str)
@@ -86,6 +87,7 @@ def parse_config():
 
     parser.add_argument("--number_of_gpu", type=int, help="Number of available GPUs.")  
     parser.add_argument("--batch_size_per_gpu", type=int, help='batch size for each gpu.') 
+    parser.add_argument("--save_npy_path", type=str, help='path to save the result npy file.')
     
     return parser.parse_args()
 
@@ -111,8 +113,16 @@ if __name__ == '__main__':
     print ('Data loaded.')
 
     print ('Loading pre-trained model...')
-    from simctg import SimCTG
-    model = SimCTG(args, args.ckpt_path, data.pad_token_id)
+    if args.mode == "multi_exit":
+        from multiexit_simctg import MultiExitSimCTG
+        print ('Initializaing MultiExitSimCTG model...')
+        model = MultiExitSimCTG(args, args.ckpt_path, data.pad_token_id)
+        model.load_lm_heads(args.ckpt_path)
+    else:
+        from simctg import SimCTG
+        print ('Initializaing SimCTG model...')
+        model = SimCTG(args, args.ckpt_path, data.pad_token_id)
+    
     if cuda_available:
         model = model.to(device)
     model.eval()

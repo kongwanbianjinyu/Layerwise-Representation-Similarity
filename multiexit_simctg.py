@@ -6,6 +6,7 @@ from torch.nn import CrossEntropyLoss
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
+import os
 
 
 train_fct = CrossEntropyLoss()
@@ -25,6 +26,13 @@ class MultiExitSimCTG(nn.Module):
         self.hidden_states = None
         self.stage = 0
         self.multi_lm_heads = [nn.Linear(self.model.config.n_embd, self.model.config.vocab_size, bias=False).to("cuda") for i in range(12)]
+
+
+    def load_lm_heads(self, ckpt_load_path):
+        lm_heads_path = os.path.join(ckpt_load_path, 'lm_heads.pth')
+        lm_heads_state_dict = torch.load(lm_heads_path)
+        for i, lm_head in enumerate(self.multi_lm_heads):
+            lm_head.load_state_dict(lm_heads_state_dict[f'lm_head_{i}'])
 
     def compute_all_layer_logits(self, input_ids):
         outputs = self.model(input_ids=input_ids, output_hidden_states=True)
@@ -59,7 +67,7 @@ class MultiExitSimCTG(nn.Module):
         loss = 0
         for i, hidden_state in enumerate(outputs.hidden_states[1:]):
             hidden_logits = self.multi_lm_heads[i](hidden_state)
-            layer_i_loss = train_fct(hidden_logits.view(-1, self.vocab_size), labels.view(-1))
+            layer_i_loss = (1/12) * train_fct(hidden_logits.view(-1, self.vocab_size), labels.view(-1))
             loss += layer_i_loss
             all_layer_loss.append(layer_i_loss)
 
@@ -83,7 +91,7 @@ class MultiExitSimCTG(nn.Module):
         all_layer_loss = 0
         for i, hidden_state in enumerate(outputs.hidden_states[1:]):
             hidden_logits = self.multi_lm_heads[i](hidden_state)
-            layer_i_loss = val_fct(hidden_logits.view(-1, self.vocab_size), labels.view(-1))
+            layer_i_loss = (1/12) * val_fct(hidden_logits.view(-1, self.vocab_size), labels.view(-1))
             layer_i_loss_each_token_avg = torch.sum(layer_i_loss * mask.view(-1)) / token_num_sum
             all_layer_loss += layer_i_loss_each_token_avg
             each_layer_loss.append(layer_i_loss_each_token_avg)
@@ -141,6 +149,11 @@ class MultiExitSimCTG(nn.Module):
         self.model.save_pretrained(ckpt_save_path)
         # save tokenizer
         self.tokenizer.save_pretrained(ckpt_save_path)
+
+        # Save LM heads
+        lm_heads_state_dict = {f'lm_head_{i}': lm_head.state_dict() for i, lm_head in enumerate(self.multi_lm_heads)}
+        lm_heads_path = os.path.join(ckpt_save_path, 'lm_heads.pth')
+        torch.save(lm_heads_state_dict, lm_heads_path)
 
     # decoding functions
     # ------------------------------------------------------- #

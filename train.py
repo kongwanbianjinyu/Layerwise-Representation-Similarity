@@ -42,6 +42,7 @@ def parse_config():
     parser.add_argument("--margin", type=float)
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument("--save_path_prefix", type=str, help="directory to save the model parameters.")
+    parser.add_argument("--only_train_lm_heads", action='store_true', help="only train the language model heads.")
     return parser.parse_args()
 
 def load_previous_best_model(path):
