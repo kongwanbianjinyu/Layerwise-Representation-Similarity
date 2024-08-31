@@ -174,3 +174,4 @@ cython_debug/
 *.npy
 multi_exit_wikitext103_saveheads/
 multi_exit_wikitext103/
+*.png

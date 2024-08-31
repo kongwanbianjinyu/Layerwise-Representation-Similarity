@@ -75,6 +75,43 @@ def eval_model_logits(args, model, data, device):
     return all_token_index
 
 
+def eval_model_cosine_similarity(args, model, data, device):
+    print('Start computing cosine similarity...')
+    model.eval()
+    dataset_batch_size = args.number_of_gpu * args.batch_size_per_gpu
+    eval_step = int(data.test_num / dataset_batch_size) + 1
+    p = progressbar.ProgressBar(eval_step)
+    p.start()
+    
+    all_layer_cosine_similarities = []
+    
+    with torch.no_grad():
+        for idx in range(eval_step):
+            p.update(idx)
+            batch_input_tensor, _, _ = data.get_next_validation_batch(batch_size=dataset_batch_size, mode='test')
+            batch_input_tensor = batch_input_tensor.to(device)
+            
+            cosine_similarities = model.compute_cosine_similarity_with_last_hidden_state(batch_input_tensor)
+            all_layer_cosine_similarities.append(cosine_similarities)
+            
+            print(f"Batch[{idx}] Cosine similarities: {[f'{sim:.4f}' for sim in cosine_similarities]}")
+        
+    p.finish()
+    
+    # Combine all batches
+    all_layer_cosine_similarities = [torch.stack([batch[i] for batch in all_layer_cosine_similarities]).mean() 
+                                     for i in range(len(all_layer_cosine_similarities[0]))]
+    
+    print('Average cosine similarities for each layer:')
+    for i, sim in enumerate(all_layer_cosine_similarities):
+        print(f'Layer {i+1}: {sim.item():.4f}')
+    
+    print("Cosine Similarity with Last Hidden States", [round(sim.item(), 4) for sim in all_layer_cosine_similarities])
+    
+    return all_layer_cosine_similarities
+    
+
+
 def parse_config():
     parser = argparse.ArgumentParser()
     # model and data configuration
@@ -129,4 +166,5 @@ if __name__ == '__main__':
     print ('Model loaded') 
 
     with torch.no_grad():
-        all_token_index = eval_model_logits(args, model, data, device)
+        #all_token_index = eval_model_logits(args, model, data, device)
+        all_layer_cosine_similarities = eval_model_cosine_similarity(args, model, data, device)

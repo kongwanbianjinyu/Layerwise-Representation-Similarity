@@ -47,6 +47,27 @@ class SimCTG(nn.Module):
         # all_layer_logits shape: 12 * (batch_size, sequence_length, vocab_size)
         return all_layer_logits
 
+    def compute_cosine_similarity_with_last_hidden_state(self, input_ids):
+        outputs = self.model(input_ids=input_ids, output_hidden_states=True)
+        last_hidden_states = outputs.hidden_states[-1] # shape: bsz x seqlen x embed_dim
+        all_layer_cosine_similarity = []
+        for i, each_layer_hidden_states in enumerate(outputs.hidden_states[1:]):
+            cos_sim = self.compute_cosine_similarity(last_hidden_states, each_layer_hidden_states)
+            all_layer_cosine_similarity.append(cos_sim)
+        return all_layer_cosine_similarity
+    
+    def compute_cosine_similarity(self, feature_l1, feature_l2):
+        # remove global mean of feature_l1 and feature_l2 along the last dimension
+        feature_l1 = feature_l1 - torch.mean(feature_l1, dim=-1, keepdim=True)
+        feature_l2 = feature_l2 - torch.mean(feature_l2, dim=-1, keepdim=True)
+
+        # # normalize feature_l1 and feature_l2 along the last dimension
+        norm_feature_l1 = feature_l1 / feature_l1.norm(dim=-1, keepdim=True)
+        norm_feature_l2 = feature_l2 / feature_l2.norm(dim=-1, keepdim=True)
+        cosine = torch.sum(norm_feature_l1 * norm_feature_l2, dim=-1)  # shape: bsz x seqlen
+        cosine_similarity = cosine.mean()  # scalar
+        return cosine_similarity
+
     def compute_logits_and_hidden_states(self, input_ids):
         # used for advanced decoding
         # input_ids: 1 x seqlen
@@ -139,26 +160,26 @@ class SimCTG(nn.Module):
         
         return all_layer_loss, each_layer_loss,  each_layer_acc, pairwise_cosine_similarity
 
-    def compute_cosine_similarity(self, feature_l1, feature_l2, mask):
-        # remove global mean of feature_l1 and feature_l2 along the last dimension
-        feature_l1 = feature_l1 - torch.mean(feature_l1, dim=-1, keepdim=True)
-        feature_l2 = feature_l2 - torch.mean(feature_l2, dim=-1, keepdim=True)
+    # def compute_cosine_similarity(self, feature_l1, feature_l2, mask):
+    #     # remove global mean of feature_l1 and feature_l2 along the last dimension
+    #     feature_l1 = feature_l1 - torch.mean(feature_l1, dim=-1, keepdim=True)
+    #     feature_l2 = feature_l2 - torch.mean(feature_l2, dim=-1, keepdim=True)
 
-        # print the norm of global mean, very close to 0
-        # print ('norm of global mean of feature_l1: {}'.format(torch.mean(feature_l1, dim=-1, keepdim=True).norm()))
-        # print ('norm of global mean of feature_l2: {}'.format(torch.mean(feature_l2, dim=-1, keepdim=True).norm()))
+    #     # print the norm of global mean, very close to 0
+    #     # print ('norm of global mean of feature_l1: {}'.format(torch.mean(feature_l1, dim=-1, keepdim=True).norm()))
+    #     # print ('norm of global mean of feature_l2: {}'.format(torch.mean(feature_l2, dim=-1, keepdim=True).norm()))
 
-        # normalize feature_l1 and feature_l2 along the last dimension
-        norm_feature_l1 = feature_l1 / feature_l1.norm(dim=-1, keepdim=True)
-        norm_feature_l2 = feature_l2 / feature_l2.norm(dim=-1, keepdim=True)
-        cosine = norm_feature_l1 * norm_feature_l2 # shape: bsz x seqlen x embed_dim
+    #     # normalize feature_l1 and feature_l2 along the last dimension
+    #     norm_feature_l1 = feature_l1 / feature_l1.norm(dim=-1, keepdim=True)
+    #     norm_feature_l2 = feature_l2 / feature_l2.norm(dim=-1, keepdim=True)
+    #     cosine = norm_feature_l1 * norm_feature_l2 # shape: bsz x seqlen x embed_dim
 
-        # sum along the last dimension
-        cosine_similarity = torch.sum(cosine, dim=-1) # shape: bsz x seqlen
-        cosine_similarity_flat = cosine_similarity.view(-1)
+    #     # sum along the last dimension
+    #     cosine_similarity = torch.sum(cosine, dim=-1) # shape: bsz x seqlen
+    #     cosine_similarity_flat = cosine_similarity.view(-1)
 
-        cos_sim_layer_l1_l2 = torch.sum(cosine_similarity_flat * mask.view(-1)) / torch.sum(mask)
-        return cos_sim_layer_l1_l2
+    #     cos_sim_layer_l1_l2 = torch.sum(cosine_similarity_flat * mask.view(-1)) / torch.sum(mask)
+    #     return cos_sim_layer_l1_l2
     
 
     def save_model(self, ckpt_save_path):
