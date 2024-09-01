@@ -27,6 +27,23 @@ class MultiExitSimCTG(nn.Module):
         self.stage = 0
         self.multi_lm_heads = [nn.Linear(self.model.config.n_embd, self.model.config.vocab_size, bias=False).to("cuda") for i in range(12)]
 
+    def get_all_token_hidden_states(self, input_ids, labels):
+        mask_tmp = labels.masked_fill(~labels.eq(-100), 1.0)
+        mask = mask_tmp.masked_fill(mask_tmp.eq(-100), 0.0)
+        outputs = self.model(input_ids=input_ids, output_hidden_states=True)
+        hidden_states = outputs.hidden_states  # Get all layer hidden states
+        valid_hidden_states = []
+
+        for layer_hidden_states in hidden_states:  # Iterate through all layers
+            masked_hidden_states = layer_hidden_states * mask.unsqueeze(-1)  # Apply mask
+            valid_hidden_states_layer = masked_hidden_states[mask.bool()].view(-1, layer_hidden_states.size(-1))  # Reshape
+            valid_hidden_states.append(valid_hidden_states_layer)
+
+        all_token_hidden_states = torch.stack(valid_hidden_states, dim=1)  # Shape: [batch_size * num_valid_tokens, num_layers, feature_dim]
+        # remove first layer
+        return all_token_hidden_states[:, 1:, :]
+
+
 
     def load_lm_heads(self, ckpt_load_path):
         lm_heads_path = os.path.join(ckpt_load_path, 'lm_heads.pth')
